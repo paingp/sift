@@ -1,0 +1,8 @@
+# Copy to companies.yaml (gitignored) and fill in with companies you'd
+# actually work for. See SPEC.md §3.2 for how to find each ats + slug.
+
+companies:
+  - name: Example Co
+    ats: greenhouse
+    slug: examplecoslug
+    tags: [dream, infra]

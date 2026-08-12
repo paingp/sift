@@ -1,0 +1,17 @@
+# Copy to profile.yaml (gitignored). Generated from your resume in
+# Phase 3 (SPEC.md §6.1) and hand-edited — the hand-editing is where the
+# accuracy comes from.
+
+seniority_band: senior
+total_relevant_years: 8
+domains:
+  - infra
+hard_constraints:
+  locations:
+    - "Reston, VA"
+    - "Remote (US)"
+  remote_only: false
+  comp_floor: 150000
+  work_authorization: "US citizen"
+  clearance: null
+  industries_to_avoid: []

@@ -1,0 +1,43 @@
+# jobboard configuration — sources, schedules, thresholds, model names.
+# Not secret; safe to commit. Company list and resume profile live in
+# companies.yaml and profile.yaml, both gitignored.
+
+ollama:
+  embed_model: nomic-embed-text
+  chat_model: qwen2.5:14b
+  keep_alive: 30m
+
+sources:
+  greenhouse:
+    enabled: true
+  lever:
+    enabled: true
+  ashby:
+    enabled: true
+  smartrecruiters:
+    enabled: true
+  recruitee:
+    enabled: true
+  usajobs:
+    enabled: false
+  adzuna:
+    enabled: false
+  remotive:
+    enabled: false
+  jobspy_boards:
+    enabled: false
+
+scoring:
+  top_n: 40
+  scorer_version_prefix: v1
+
+filters:
+  max_age_days: 30
+  locations: []
+  exclude_titles:
+    - intern
+    - unpaid
+  exclude_companies: []
+  seniority_band: [mid, senior, staff]
+  salary_floor: null
+  require_us_work_auth_ok: true
