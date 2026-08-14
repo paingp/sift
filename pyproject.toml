@@ -15,6 +15,7 @@ dependencies = [
     "tenacity>=8.3",
     "structlog>=24.1",
     "numpy>=1.26",
+    "markdownify>=1.2.3",
 ]
 
 [project.scripts]

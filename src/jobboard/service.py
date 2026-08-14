@@ -12,6 +12,7 @@ real health check.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 
 import httpx
@@ -20,8 +21,12 @@ from alembic.runtime.migration import MigrationContext
 from alembic.script import ScriptDirectory
 from sqlalchemy import inspect
 
+from jobboard.adapters.base import SourceAdapter
+from jobboard.adapters.greenhouse import GreenhouseAdapter
 from jobboard.config import ConfigError, get_settings, load_app_config, load_companies, load_profile
-from jobboard.store.db import get_engine
+from jobboard.normalize import normalize
+from jobboard.store import repository
+from jobboard.store.db import get_engine, get_session
 
 
 @dataclass
@@ -104,3 +109,94 @@ def run_doctor() -> list[HealthCheck]:
         _check_migrations(),
         _check_ollama(),
     ]
+
+
+_ADAPTERS: dict[str, SourceAdapter] = {
+    "greenhouse": GreenhouseAdapter(),
+}
+
+
+@dataclass
+class IngestResult:
+    source: str
+    company: str
+    status: str  # ok | partial | failed
+    fetched: int
+    new: int
+    updated: int
+    closed: int
+    error: str | None
+
+
+def ingest(source: str, company_slug: str) -> IngestResult:
+    """Fetch, normalize, and upsert one company's postings from one source.
+
+    Never raises on a source failure — records status='failed' on the run
+    row and returns it, so a broken adapter never aborts a batch (CLAUDE.md
+    "Adapters are isolated").
+    """
+    adapter = _ADAPTERS.get(source)
+    if adapter is None:
+        raise ConfigError(f"no adapter registered for source {source!r}")
+
+    company = next((c for c in load_companies() if c.slug == company_slug), None)
+    if company is None:
+        raise ConfigError(f"no company with slug {company_slug!r} in companies.yaml")
+    if company.ats != source:
+        raise ConfigError(
+            f"company {company_slug!r} is configured for ats={company.ats!r}, not {source!r}"
+        )
+
+    # Naive UTC throughout storage — SQLite drops tzinfo on round-trip, so
+    # every timestamp column follows the same convention as source_posted_at
+    # (see normalize.py) to keep later comparisons apples-to-apples.
+    started_at = datetime.now(UTC).replace(tzinfo=None)
+    fetched = new = updated = 0
+    status = "ok"
+    error: str | None = None
+
+    try:
+        postings = adapter.fetch(company)
+        fetched = len(postings)
+        with get_session() as session:
+            company_row = repository.get_or_create_company(session, company)
+            for posting in postings:
+                normalized_job = normalize(posting, company)
+                _, result = repository.upsert_job(
+                    session, normalized_job, company_row.id, started_at
+                )
+                if result is repository.UpsertResult.NEW:
+                    new += 1
+                elif result is repository.UpsertResult.UPDATED:
+                    updated += 1
+            session.commit()
+    except Exception as exc:  # noqa: BLE001 - recorded on the run row, not swallowed
+        status = "failed"
+        error = str(exc)
+
+    finished_at = datetime.now(UTC).replace(tzinfo=None)
+    with get_session() as session:
+        repository.record_run(
+            session,
+            source=source,
+            status=status,
+            fetched=fetched,
+            new=new,
+            updated=updated,
+            closed=0,
+            error=error,
+            started_at=started_at,
+            finished_at=finished_at,
+        )
+        session.commit()
+
+    return IngestResult(
+        source=source,
+        company=company_slug,
+        status=status,
+        fetched=fetched,
+        new=new,
+        updated=updated,
+        closed=0,
+        error=error,
+    )

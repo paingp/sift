@@ -22,8 +22,21 @@ def ingest(
     all: bool = typer.Option(False, "--all", help="Ingest from all enabled sources"),
 ) -> None:
     """Fetch postings from configured sources into the database."""
-    typer.echo(_NOT_IMPLEMENTED)
-    raise typer.Exit(1)
+    if all:
+        typer.echo("--all not yet implemented — see BUILD_GUIDE.md Phase 2")
+        raise typer.Exit(1)
+    if not source or not company:
+        typer.echo("specify --source and --company, e.g. --source greenhouse --company anthropic")
+        raise typer.Exit(1)
+
+    result = service.ingest(source, company)
+    typer.echo(
+        f"{result.source}/{result.company}: {result.status} "
+        f"(fetched={result.fetched} new={result.new} updated={result.updated})"
+    )
+    if result.status == "failed":
+        typer.echo(f"error: {result.error}")
+        raise typer.Exit(1)
 
 
 @app.command()
